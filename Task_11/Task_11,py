@@ -1,0 +1,186 @@
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+import math 
+
+#Parametres
+IMAGE_PATH = "1.jpg"  
+MIN_AREA = 1200  
+K_OPEN = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+K_CLOSE = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+
+
+def part_a ():
+    img = cv2.imread(IMAGE_PATH)
+
+    if img is None:
+        raise FileNotFoundError("Image not found. Please check the file path.")
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    __,mask = cv2.threshold(blurred, 230, 255, cv2.THRESH_BINARY_INV )
+    
+    cleaned_mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))    
+    cleaned_mask = cv2.morphologyEx(cleaned_mask, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
+    
+    contours, __ = cv2.findContours(cleaned_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    valid_contours = [c for c in contours if cv2.contourArea(c) > MIN_AREA]
+    print(f"Number of valid contours: {len(valid_contours)}")
+    
+    annotated = img.copy()
+    print("\n" + "=" * 90)
+    print(
+        f"{'Idx':<4} | {'Area(px²)':<9} | {'Perim(px)':<9} | {'Centroid':<12} | {'BBox (x,y,w,h)':<16} | {'AR':<5} | {'Ext':<5} | {'Sol':<5}"
+    )
+    print("=" * 90)
+    
+    for indx , cnt in enumerate(valid_contours):
+        area = cv2.contourArea(cnt)
+        perimeter = cv2.arcLength(cnt, True)
+        M = cv2.moments(cnt)
+        centroid_x = int(M["m10"] / M["m00"])
+        centroid_y = int(M["m01"] / M["m00"])
+        x, y, w, h = cv2.boundingRect(cnt)
+        aspect_ratio = w / h
+        extent = area / (w * h)
+        hull_area = cv2.contourArea(cv2.convexHull(cnt))
+        solidity = area / hull_area if hull_area > 0 else 0
+            
+        print("\n" + "=" * 90)
+        print(
+            f"{'Idx':<4} | {'Area(px²)':<9} | {'Perim(px)':<9} | {'Centroid':<12} | {'BBox (x,y,w,h)':<16} | {'AR':<5} | {'Ext':<5} | {'Sol':<5}"
+        )
+        print("=" * 90)
+        
+        print(
+            f"{indx:<4} | {area:<9.2f} | {perimeter:<9.2f} | ({centroid_x},{centroid_y})   | ({x},{y},{w},{h})   | {aspect_ratio:<5.2f} | {extent:<5.2f} | {solidity:<5.2f}"
+        )
+        
+        cv2.rectangle(annotated, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        cv2.circle(annotated, (centroid_x, centroid_y), 5, (0, 0, 255), -1)
+        cv2.putText(annotated, f"Idx: {indx}", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
+        
+        epsilon = 0.02 * cv2.arcLength(cnt, True)
+        approx = cv2.approxPolyDP(cnt, epsilon, True)
+        vertices = len(approx)
+        
+        if vertices == 3:
+            shape_type = "Triangle"
+        elif vertices == 4:
+            shape_type = "Quadrilateral"
+        elif vertices == 5:
+            shape_type = "Pentagon"
+        elif vertices == 6:
+            shape_type= "Hexagon"
+        else :
+            circularity = (
+                (4 * math.pi * area) / (perimeter**2) if perimeter > 0 else 0
+            )
+            shape_type = "Circle" if circularity > 0.70 else "Complex Fruit"
+            
+        # Draw Yellow Polygon Overlay
+        cv2.drawContours(annotated,[approx],0,(0,255,255),1)
+        cv2.putText(
+            annotated,
+            f"{shape_type}",
+            (x - 20, y + 15),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.4,
+            (0, 255, 255),
+            1,
+            cv2.LINE_AA,
+        )
+        # Save Part A Image
+    cv2.imwrite("part_a_annotated_contours.png", annotated)
+    print("\n[+] Saved Part A Output: part_a_annotated_contours.png")
+    
+def part_b () :
+    frame =cv2.imread(IMAGE_PATH)
+    if frame is None :
+        return
+    gray=cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
+    blurred=cv2.GaussianBlur(gray,(5,5),0)
+    
+    _,clean_mask = cv2.threshold(blurred,230,255,cv2.THRESH_BINARY_INV)
+    clean_mask=cv2.morphologyEx(clean_mask,cv2.MORPH_CLOSE,K_CLOSE)
+    clean_mask=cv2.morphologyEx(clean_mask,cv2.MORPH_OPEN,K_OPEN)
+    
+    contours , _ = cv2.findContours(clean_mask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
+    vaild = [c for c in contours if cv2.contourArea(c) > MIN_AREA]
+    
+    output = frame.copy()
+    if vaild:
+        
+        largest = max(vaild, key=cv2.contourArea)
+        area = cv2.contourArea(largest)
+        x, y, w, h = cv2.boundingRect(largest)
+        aspect_ratio = float(w) / h if h != 0 else 0
+
+        M = cv2.moments(largest)
+        cx = int(M["m10"] / M["m00"]) if M["m00"] != 0 else 0
+        cy = int(M["m01"] / M["m00"]) if M["m00"] != 0 else 0
+
+       
+        cv2.rectangle(output, (x, y), (x + w, y + h), (0, 255, 0), 3)
+        cv2.circle(output, (cx, cy), 6, (0, 0, 255), -1)
+        cv2.putText(
+            output,
+            f"Largest Object Area:{int(area)} Cx:{cx} Cy:{cy}",
+            (x, max(15, y - 10)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (0, 255, 0),
+            2,
+            cv2.LINE_AA,
+        )
+        
+        zoom_crop = frame[y:y+h , x:x + w]
+        
+        cv2.imwrite("part_b_localized_output.png", output)
+        cv2.imwrite("part_b_clean_mask.png", clean_mask)
+        cv2.imwrite("part_b_zoom_crop.png", zoom_crop)
+        
+        print("\n" + "=" * 55)
+        print("      --- TASK 11 PART B TERMINAL METRICS ---      ")
+        print("=" * 55)
+        print(f"Largest Object Area : {area:.0f} px²")
+        print(f"Bounding Box (x,y,w,h): ({x}, {y}, {w}, {h})")
+        print(f"Centroid Position   : ({cx}, {cy})")
+        print(f"Aspect Ratio        : {aspect_ratio:.2f}")
+        
+        hu = cv2.HuMoments(M)
+        hu_log = -np.sign(hu) * np.log10(np.abs(hu)+ 1e-10)
+        hu_log_flat = hu_log.flatten()
+        
+        print("\nLog-Transformed Hu Moments:")
+        for idx_hu, val in enumerate(hu_log_flat):
+            print(f"  h{idx_hu+1}: {val:.4f}")
+
+        np.savetxt(
+            "hu_moments.txt",
+            hu_log_flat,
+            fmt="%.6f",
+            header="Log-Transformed Hu Moments (h1 to h7)",
+        )
+        print(
+            "\n[+] Saved Part B Files: hu_moments.txt, part_b_localized_output.png, part_b_clean_mask.png, part_b_zoom_crop.png"
+        )
+        
+if __name__ == "__main__":
+    part_a()
+    part_b()
+    
+"""
+
+PART B - Item 10 Comment Block Answers
+
+(a) What is the typical area range of your object in the frame?
+    - The larger fruit objects (like Oranges) typically range between 2500 and 4000 px² in this image.
+
+(b) Is the bounding box stable across frames?
+    - Yes thresholding coupled with morphological cleanup effectively isolates fruit boundaries cleanly.
+
+(c) Does the centroid track the object correctly?
+    - Yes the centroid calculated via image moments sits directly at the center of mass for each fruit contour.
+"""
